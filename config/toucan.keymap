@@ -90,7 +90,7 @@
 &kp TILDE  &kp EXCL  &kp AT  &kp HASH                  &kp DLLR                   &kp PRCNT  &kp CARET  &kp AMPS          &kp KP_MULTIPLY    &kp LPAR        &kp RPAR  &trans
 &trans     &trans    &trans  &trans                    &trans                     &trans     &kp PLUS   &kp LEFT_BRACKET  &kp RIGHT_BRACKET  &kp MINUS       &trans    &trans
 &trans     &trans    &trans  &trans                    &trans                     &trans     &kp EQUAL  &kp LEFT_BRACE    &kp RIGHT_BRACE    &kp UNDERSCORE  &trans    &trans
-&trans     &trans    &trans  &kp LG(LS(LEFT_BRACKET))  &kp LG(LS(RIGHT_BRACKET))  &trans
+&trans     &kp LG(LEFT)    &kp LG(RIGHT)  &kp LG(LS(LEFT_BRACKET))  &kp LG(LS(RIGHT_BRACKET))  &trans
             >;
         };
 
