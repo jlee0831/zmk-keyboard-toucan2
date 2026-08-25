@@ -27,3 +27,17 @@ include:
     shield: toucan_right rgbled_adapter
   - board: seeeduino_xiao_ble
     shield: settings_reset
+  # TEMPORARY debug build for diagnosing the right-half freeze (see conversation).
+  # Flash this to the right half, connect it via USB-C to a computer, and open a
+  # serial terminal on the USB CDC ACM device it enumerates as (independent of the
+  # BLE link, so it works even though this half is a split peripheral). Reproduce
+  # the freeze and capture the last log lines before output stops.
+  # Remove this entry once done debugging.
+  - board: seeeduino_xiao_ble
+    shield: toucan_right rgbled_adapter
+    snippet: zmk-usb-logging
+    cmake-args: >-
+      -DCONFIG_INPUT_LOG_LEVEL_DBG=y
+      -DCONFIG_I2C_LOG_LEVEL_DBG=y
+      -DCONFIG_LOG_MODE_IMMEDIATE=y
+    artifact-name: toucan_right_debug
