@@ -179,16 +179,13 @@
 
     // Scroll coast: higher decay = glides further before stopping.
     //
-    // threshold-start is intentionally 1, not the module's default of 2: this
-    // compares against the wheel event *after* `zip_scroll_scaler 1 20` (last
-    // in the scroller pipeline), which divides raw trackpad deltas by 20 with
-    // the remainder carried across reports. That makes the scaled per-report
-    // value almost always 0 or 1 - reaching 2 requires ~40 raw counts in a
-    // single report, which basically never happens, especially as the finger
-    // decelerates right before lift-off. At threshold 2 this never armed.
+    // threshold-start reverted to the module's default of 2 (was tried at 1)
+    // - see docs/scroll-inertia.md "Testing threshold 1 vs 2" for why: 1 was
+    // never actually confirmed to matter, and is suspected of making inertia
+    // over-trigger on ordinary scrolling, not just flicks.
     scroll-decay-factor-int = <85>;
     scroll-report-interval-ms = <65>;
-    scroll-threshold-start = <1>;
+    scroll-threshold-start = <2>;
     scroll-threshold-stop = <0>;
 
     // Don't let Ctrl+wheel (zoom) pick up leftover scroll momentum.

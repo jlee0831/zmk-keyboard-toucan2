@@ -48,7 +48,7 @@ this for a third-party HID device.
   | `move-threshold-start` | 32000 | Effectively disables *cursor* inertia (see "Second bug hit" below for why this matters now). |
   | `scroll-decay-factor-int` | 85 | % velocity retained per report. Higher = coasts further/longer. Keep < 100 (100 never stops, >100 runs away). |
   | `scroll-report-interval-ms` | 65 | How chunky vs. smooth the coast feels. |
-  | `scroll-threshold-start` | 1 | Minimum velocity to trigger coasting at all. **Not 2 (the module's default) — see "first bug hit" below.** |
+  | `scroll-threshold-start` | 2 | Minimum velocity to trigger coasting at all (module default). Was tried at `1`, then reverted — see "Bug hunt timeline" below for why. |
   | `scroll-threshold-stop` | 0 | Velocity floor where coasting ends. |
   | `cancel-scroll-inertia-on-ctrl` | on | Stops/suppresses inertia while Ctrl is held, so leftover momentum can't trigger an accidental Ctrl+wheel zoom. |
 
@@ -149,75 +149,94 @@ Whenever `config/west.yml`'s `zmk` project `revision` moves off `v0.3`
    upstream for bug fixes/improvements since the vendored commit
    periodically, independent of any ZMK version bump.
 
-## First bug hit after a clean build: threshold vs. the `/20` scroll scaler
+## Bug hunt timeline
+
+Three rounds, in order, because each one only made sense in light of what
+the previous round's test actually proved (or didn't):
+
+### 1. Threshold vs. the `/20` scroll scaler — real math, wrong target
 
 Firmware built and flashed fine, but inertia produced no perceptible effect
-at all. Root cause: `zip_inertia` sits *after* `zip_scroll_scaler 1 20` in
-the `scroller` pipeline (it has to — see above), and that scaler divides raw
-trackpad deltas by 20, carrying the remainder across reports
-(`zip_scroll_scaler` has `track-remainders;` by default in ZMK core). That
-makes the scaled value `zip_inertia` actually sees almost always `0` or `1`
-per report — reaching `2` requires ~40 raw counts in a *single* report,
-which essentially never happens, especially as the finger decelerates right
-before lift-off. At the module's default `scroll-threshold-start = 2`,
-inertia essentially never armed.
+at all. Traced `zip_scroll_scaler 1 20` (divides raw trackpad deltas by 20,
+carrying the remainder across reports — `track-remainders;` by default in
+ZMK core) against `zip_inertia`'s threshold check, and concluded the scaled
+value reaching `zip_inertia` is almost always `0` or `1` — reaching the
+module's default `scroll-threshold-start = 2` needs ~40 raw counts in a
+*single* report, which essentially never happens. **Fix tried:** lowered
+`scroll-threshold-start` to `1`.
 
-Fix applied: lowered `scroll-threshold-start` to `1` (see table above).
+**Result: no change at all.** That's a strong signal the code path wasn't
+running, not just under-triggering — see round 2.
 
-**This is a minimal, untested-on-hardware hypothesis fix** — the theory is
-solid (traced through both `zip_scroll_scaler`'s and `zip_inertia`'s actual
-source), but confirm on hardware before assuming it's fully resolved. Also
-worth knowing going in: even once it arms, the coast is inherently short at
-this resolution — a value of `1` decaying at 85%/report only produces ~4
-more report intervals (~250ms) of a single-count wheel tick before hitting
-the `0` stop threshold. That's a real but subtle nudge, not the multi-second
-glide of a real trackpad. If it's armed but still not satisfying, the
-likely next lever is the `zip_scroll_scaler 1 20` divisor itself (more
-resolution = smoother/longer decay curve), which trades off against the
-sensitivity tuning from the "Reduce scroll sensitivity" commit — don't
-change that without deciding it's worth revisiting that tradeoff.
+### 2. `zip_inertia` was in a pipeline that never ran — the actual blocker
 
-If lowering the threshold doesn't fix it, the next diagnostic step is
-reading the module's `LOG_DBG("Scroll Inertia triggered...")` line over
-RTT/serial to see the actual raw/scaled values in real time — there's
-already precedent for this in the `logging` branch ("Add logging to debug
-trackpad freeze").
-
-## Second bug hit: `zip_inertia` was in a pipeline that never ran
-
-The threshold fix alone still produced *zero* difference — a strong signal
-that the code path wasn't running at all, not just under-triggering. Read
-ZMK v0.3's actual `input_listener.c` (`filter_with_input_config`) to check:
-
-A `zmk,input-listener` node's child sub-nodes (like `scroller`, with
-`layers = <1 2>`) are **overrides**, not additions. When the current layer
-matches one, `apply_config` runs *only* that override's `input-processors`
-list, then `return 0` immediately — the top-level (base) list is skipped
-entirely (unless the override sets `process-next;`, which `scroller`
-doesn't). Conversely, whenever the active layer does *not* match an
-override — i.e. whenever you're not holding layer 1 (SYM) or 2 (NUM) — the
-**base** list runs instead, unconditionally, for every event including
-native two-finger scroll.
+Read ZMK v0.3's actual `input_listener.c` (`filter_with_input_config`). A
+`zmk,input-listener` node's child sub-nodes (like `scroller`, with
+`layers = <1 2>`) are **overrides**, not additions: when the current layer
+matches one, only that override's `input-processors` list runs, and the
+top-level (base) list is skipped entirely (unless the override sets
+`process-next;`, which `scroller` doesn't). Whenever the active layer
+*doesn't* match an override — i.e. whenever you're not holding layer 1
+(SYM) or 2 (NUM) — the **base** list runs instead, for every event
+including native two-finger scroll.
 
 `zip_inertia` had only ever been added to the `scroller` override. Ordinary
-scrolling — done from the base layer, like nearly all scrolling — went
-through the base list the whole time, which never had `zip_inertia` in it.
-The threshold-vs-scaling bug above was real, but it was a bug in a pipeline
-that wasn't even being exercised.
+scrolling, done from the base layer like nearly all scrolling, went through
+the base list the whole time, which never had `zip_inertia` in it — so
+round 1's threshold change was operating on a pipeline that wasn't even
+being exercised, which is exactly why it produced no change.
 
-Fix applied: added `&zip_inertia` to the end of the base `input-processors`
+**Fix:** added `&zip_inertia` to the end of the base `input-processors`
 list too (see the wiring above). Because the base list also carries plain
-`REL_X`/`REL_Y` cursor-movement events, and `zip_inertia` reacts to move and
-scroll independently through the same node, this also required explicitly
-neutralizing move inertia (`move-threshold-start = 32000`, effectively
-unreachable) so the cursor doesn't start gliding after normal pointer
-movement — see the tuning table above.
+`REL_X`/`REL_Y` cursor-movement events, and `zip_inertia` reacts to move
+and scroll independently through the same node, this also required
+explicitly neutralizing move inertia (`move-threshold-start = 32000`,
+effectively unreachable) so the cursor doesn't start gliding after normal
+pointer movement.
 
-**Also unverified on hardware as of writing.** If this still doesn't
-produce a noticeable effect, the next step is the RTT/serial `LOG_DBG`
-route mentioned above, to directly confirm the scroll event even reaches
-`zip_inertia` at all — at that point stop tuning blind and get real
-runtime values before changing anything else again.
+**Result: inertia appeared, but "choppy."** See round 3 — and see the
+correction below about round 1's threshold change.
+
+### 3. "Some inertia, but choppy" — and retracting round 1's threshold change
+
+Two things came out of this round:
+
+**a. The choppiness itself** is the `/20`-scaled values being too coarse
+for the decay math to produce a ramp. An input of `1` can't decay
+`1 → 0.8 → 0.6 …` — integers can't — so it holds at `1` for a few report
+intervals and then drops straight to `0`. That's a structural "constant
+speed, then a cliff," not a bad number to retune away.
+
+**b. Round 1's fix was never actually validated, and got retracted.**
+Walking back through the timeline: `scroll-threshold-start` was changed
+`2 → 1` in round 1, *before* the round 2 wiring fix, and produced zero
+observed change at the time. It's tempting to read "we lowered it and then
+things eventually worked" as "so `1` was necessary" — but that's exactly
+backwards: round 1's test *proved nothing either way*, because the pipeline
+it was changing wasn't running yet. The wiring fix in round 2 is what
+actually made inertia appear; whether `1` vs `2` matters was never actually
+tested against the corrected wiring. Worse, `1` is suspected of *causing*
+some of the choppiness — at that threshold inertia arms on almost any
+scroll motion, not just decisive flicks, unlike a real trackpad which only
+shows momentum after a flick.
+
+**Fix:** reverted `scroll-threshold-start` back to the module's default of
+`2`, now that the wiring (round 2) is actually correct, as a clean
+single-variable test: does this alone reduce the choppiness, independent of
+the coarse-quantization issue in (a)?
+
+**Still unverified on hardware as of writing.** The quantization issue in
+(a) is architectural and will need the divisor/sensitivity trade-off
+discussed in chat (and not yet applied) regardless of what this test shows
+— this round's revert is specifically to stop confounding "does 1 vs 2
+matter" with "is the decay curve inherently coarse," which had gotten
+tangled together.
+
+If further changes are needed, the next diagnostic step is reading the
+module's `LOG_DBG("Scroll Inertia triggered...")` line over RTT/serial to
+see actual raw/scaled trigger values in real time, rather than continuing
+to infer them — there's precedent for this in the `logging` branch ("Add
+logging to debug trackpad freeze").
 
 ## Gotcha hit while building this (for future `toucan.dtsi` edits)
 
