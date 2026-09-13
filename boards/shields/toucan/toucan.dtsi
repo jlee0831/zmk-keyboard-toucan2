@@ -1,4 +1,5 @@
 #include <input/processors.dtsi>
+#include <zmk-input-inertia/input/processor/input_inertia.dtsi>
 #include <dt-bindings/input/input-event-codes.h>
 #include <dt-bindings/zmk/input_transform.h>
 #include <dt-bindings/zmk/keys.h>
@@ -130,7 +131,6 @@
         };
     };
 
-
     split_inputs {
         #address-cells = <1>;
         #size-cells = <0>;
@@ -152,7 +152,27 @@
                 &zip_xy_to_scroll_mapper
                 &zip_scroll_scaler 1 20
                 &zip_scroll_transform INPUT_TRANSFORM_X_INVERT
+                &zip_inertia
             >;
         };
     };
+};
+
+// zip_inertia node itself comes from zmk-input-inertia/input/processor/input_inertia.dtsi
+// (included above); this just overrides its tuning. Only used on the scroller pipeline
+// above, so a lifted finger coasts the scroll like macOS trackpad momentum, while plain
+// cursor movement stays 1:1 (real trackpads don't let the pointer glide after you lift off).
+&zip_inertia {
+    // Azoteq active-mode polling is fast; keep this >= 2x the sensor's report interval
+    // so a normal flick isn't mistaken for "stopped".
+    trigger-ms = <40>;
+
+    // Scroll coast: higher decay = glides further before stopping.
+    scroll-decay-factor-int = <85>;
+    scroll-report-interval-ms = <65>;
+    scroll-threshold-start = <2>;
+    scroll-threshold-stop = <0>;
+
+    // Don't let Ctrl+wheel (zoom) pick up leftover scroll momentum.
+    cancel-scroll-inertia-on-ctrl;
 };
