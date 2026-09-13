@@ -10,8 +10,6 @@ manifest:
       url-base: https://github.com/beekeeb
     - name: prospector
       url-base: https://github.com/t-ogura
-    - name: amgskobo
-      url-base: https://github.com/amgskobo
   projects:
     - name: zmk
       remote: zmkfirmware
@@ -25,9 +23,6 @@ manifest:
       revision: main
     - name: zmk-input-zoom
       remote: beekeeb
-      revision: main
-    - name: zmk-input-inertia
-      remote: amgskobo
       revision: main
     - name: prospector-zmk-module
       remote: prospector

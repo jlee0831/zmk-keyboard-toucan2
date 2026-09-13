@@ -145,7 +145,7 @@
         compatible = "zmk,input-listener";
         status = "disabled";
         device = <&trackpad_split>;
-        input-processors = <&zip_xy_scaler 100 100>, <&zip_scroll_scaler 1 20>, <&zip_zoom_mapper>, <&is_touching_processor>;
+        input-processors = <&zip_xy_scaler 100 100>, <&zip_scroll_scaler 1 20>, <&zip_zoom_mapper>, <&is_touching_processor>, <&zip_inertia>;
         scroller {
             layers = <1 2>;
             input-processors = <
@@ -159,18 +159,36 @@
 };
 
 // zip_inertia node itself comes from zmk-input-inertia/input/processor/input_inertia.dtsi
-// (included above); this just overrides its tuning. Only used on the scroller pipeline
-// above, so a lifted finger coasts the scroll like macOS trackpad momentum, while plain
-// cursor movement stays 1:1 (real trackpads don't let the pointer glide after you lift off).
+// (included above); this just overrides its tuning. It's referenced from both
+// trackpad_listener's base input-processors (native scroll, any layer) and the
+// scroller override (layers 1/2, drag-to-scroll) - see the comment there for why
+// it has to be in both. Same shared node either way, so move-threshold-start below
+// is set unreachably high: real trackpads don't let the pointer glide after you
+// lift off, and this node also sees plain REL_X/REL_Y cursor movement since it's
+// in the base list now, not just scroll.
 &zip_inertia {
     // Azoteq active-mode polling is fast; keep this >= 2x the sensor's report interval
     // so a normal flick isn't mistaken for "stopped".
     trigger-ms = <40>;
 
+    // Effectively disabled: no raw cursor-movement delta will ever reach this
+    // (int16 max is 32767), so move inertia can never arm. See the note above -
+    // this node processes REL_X/REL_Y too now that it's in the base pipeline,
+    // and cursor glide is not wanted.
+    move-threshold-start = <32000>;
+
     // Scroll coast: higher decay = glides further before stopping.
+    //
+    // threshold-start is intentionally 1, not the module's default of 2: this
+    // compares against the wheel event *after* `zip_scroll_scaler 1 20` (last
+    // in the scroller pipeline), which divides raw trackpad deltas by 20 with
+    // the remainder carried across reports. That makes the scaled per-report
+    // value almost always 0 or 1 - reaching 2 requires ~40 raw counts in a
+    // single report, which basically never happens, especially as the finger
+    // decelerates right before lift-off. At threshold 2 this never armed.
     scroll-decay-factor-int = <85>;
     scroll-report-interval-ms = <65>;
-    scroll-threshold-start = <2>;
+    scroll-threshold-start = <1>;
     scroll-threshold-stop = <0>;
 
     // Don't let Ctrl+wheel (zoom) pick up leftover scroll momentum.

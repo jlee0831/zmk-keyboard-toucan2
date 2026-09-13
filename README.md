@@ -8,6 +8,7 @@
 - **General configs**: [boards/shields/toucan/toucan_left.conf](boards/shields/toucan/toucan_left.conf) and [boards/shields/toucan/toucan_right.conf](boards/shields/toucan/toucan_right.conf)
 - **Swipe shortcuts**: the `swipe_button_mapper` node in [boards/shields/toucan/toucan.dtsi](boards/shields/toucan/toucan.dtsi)
 - **Invert scroll / trackpad settings**: the `tps43_trackpad` node in [boards/shields/toucan/toucan_right.overlay](boards/shields/toucan/toucan_right.overlay)
+- **Scroll inertia (momentum scrolling)**: see [docs/scroll-inertia.md](docs/scroll-inertia.md) for how it's wired up, tuning knobs, and what to do when ZMK gets a new version
 
 # License
 

@@ -1,0 +1,72 @@
+description: ZMK Inertia Input Processor
+
+compatible: "zmk,input-processor-inertia"
+
+include: ip_zero_param.yaml
+
+properties:
+  trigger-ms:
+    type: int
+    default: 35
+    description: |
+      The delay (ms) after manual input stops before inertia starts.
+      IMPORTANT: To prevent "bouncing" or accidental triggers during manual movement,
+      set this to AT LEAST TWICE the sensor's polling interval (e.g., 30ms for a 15ms sensor).
+
+  move-decay-factor-int:
+    type: int
+    default: 90
+    description: |
+      Velocity retention percentage (0-100) per report interval.
+      Higher values (e.g., 95) make the movement feel slipperier and longer-lasting.
+
+  move-report-interval-ms:
+    type: int
+    default: 35
+    description: |
+      The time interval (ms) for calculating and sending inertia movement reports.
+      Matching this to your sensor's polling rate (e.g., 15ms) provides the smoothest transition.
+
+  move-threshold-start:
+    type: int
+    default: 15
+    description: |
+      Minimum velocity magnitude from the last manual input required to start inertia.
+      Prevents accidental sliding from micro-gestures.
+
+  move-threshold-stop:
+    type: int
+    default: 1
+    description: |
+      Minimum velocity magnitude required to continue inertia movement.
+      Once velocity falls below this, the inertia movement stops completely.
+
+  scroll-decay-factor-int:
+    type: int
+    default: 85
+    description: |
+      Velocity retention percentage for scrolling. Higher values result in longer scrolls.
+
+  scroll-report-interval-ms:
+    type: int
+    default: 65
+    description: |
+      The time interval (ms) for scroll inertia updates.
+
+  scroll-threshold-start:
+    type: int
+    default: 2
+    description: |
+      Minimum scroll velocity magnitude to activate inertia.
+
+  scroll-threshold-stop:
+    type: int
+    default: 0
+    description: |
+      Minimum scroll velocity to continue inertia.
+
+  cancel-scroll-inertia-on-ctrl:
+    type: boolean
+    description: |
+      When set to true, stop active scroll inertia and suppress new scroll inertia while Ctrl is pressed.
+      This is useful to avoid accidental host-side zoom actions from Ctrl+wheel.
